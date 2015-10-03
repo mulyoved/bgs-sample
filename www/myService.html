@@ -47,6 +47,13 @@
  				myService.getStatus(	function(r){handleSuccess(r)},
  										function(e){handleError(e)});
  			};
+
+ 			function getInternalData() {
+ 				myService.getInternalData(	function(r){
+ 					console.log('getInternalData', r);
+ 				},
+				function(e){handleError(e)});
+ 			}
  			
  			function startService() {
 				myService.startService(	function(r){handleSuccess(r)},
@@ -110,6 +117,7 @@
 				var listenBtn = document.getElementById("toggleListen");
 				var updateBtn = document.getElementById("updateBtn");
 				var refreshBtn = document.getElementById("refreshBtn");
+				var internalDataBtn = document.getElementById("internalDataBtn");
 
 				var serviceStatus = document.getElementById("serviceStatus");
 				var timerStatus = document.getElementById("timerStatus");
@@ -135,6 +143,9 @@
 					refreshBtn.disabled = false;
 					refreshBtn.onclick = getStatus;
 
+					internalDataBtn.disabled = false;
+					internalDataBtn.onclick = getInternalData;
+
 				} else { 
 					serviceStatus.innerHTML = "Not running";
 					serviceBtn.onclick = startService;
@@ -143,6 +154,7 @@
 
 					updateBtn.disabled = true;
 					refreshBtn.disabled = true;
+					internalDataBtn.disabled = true;
 				} 
 
 				bootBtn.disabled = false;
@@ -233,7 +245,11 @@
 			<tr>
 				<td colspan=3 align="center"><input disabled id="refreshBtn" type="button" value="Refresh"/></td>
 			</tr>
-			
+
+			<tr>
+				<td colspan=3 align="center"><input disabled id="internalDataBtn" type="button" value="Get Internal Data"/></td>
+			</tr>
+
 		</table>
 		
 	</body>
