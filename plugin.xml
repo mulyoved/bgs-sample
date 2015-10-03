@@ -17,7 +17,7 @@
     </engines>
 
 	<!-- Load in the core background service -->
-	<dependency id="com.red_folder.phonegap.plugin.backgroundservice" url="https://github.com/Red-Folder/bgs-core.git"/>
+	<dependency id="com.red_folder.phonegap.plugin.backgroundservice" url="https://github.com/mulyoved/bgs-core.git"/>
 
     <!-- android -->
     <platform name="android">
@@ -29,16 +29,16 @@
 		</js-module>
 
         <config-file target="AndroidManifest.xml" parent="/manifest/application">
-  
+
             <service android:name="com.red_folder.phonegap.plugin.backgroundservice.sample.MyService">
-                <intent-filter>         
-                    <action android:name="com.red_folder.phonegap.plugin.backgroundservice.sample.MyService"/> 
-                </intent-filter>     
+                <intent-filter>
+                    <action android:name="com.red_folder.phonegap.plugin.backgroundservice.sample.MyService"/>
+                </intent-filter>
             </service>
-            
+
         </config-file>
-        
+
         <source-file src="src/android/MyService.java" target-dir="src/com/red_folder/phonegap/plugin/backgroundservice/sample" />
     </platform>
-	
+
 </plugin>
