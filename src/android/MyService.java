@@ -58,6 +58,8 @@ public class MyService extends BackgroundService {
 		float z;
 		float g;
 		long time;
+		int stepCounter;
+		int stepDetector;
 
 		public JSONObject getJson() throws JSONException {
 			JSONObject result = new JSONObject();
@@ -67,6 +69,8 @@ public class MyService extends BackgroundService {
 			result.put("z", z);
 			result.put("g", g);
 			result.put("time", time);
+			result.put("stepCounter", stepCounter);
+			result.put("stepDetector", stepDetector);
 
 			return result;
 		}
@@ -85,6 +89,9 @@ public class MyService extends BackgroundService {
 			result.put("avg", mAvg);
 			result.put("avgSampleRate", mAvgSampleRate);
 			result.put("sampleCount", mSampleCount);
+			result.put("stepCounter", mStepCounter);
+			result.put("stepDetector", mStep);
+
 
 			String statusString = "drive";
 			if (mStatus == 1) statusString = "walk";
@@ -283,6 +290,8 @@ public class MyService extends BackgroundService {
 				accReading.z = z;
 				accReading.g = gravity;
 				accReading.time = time;
+				accReading.stepCounter = (int) mStepCounter;
+				accReading.stepDetector = mStep;
 
 				int itemCount = 0;
 				synchronized (accelerometerReadingList) {
