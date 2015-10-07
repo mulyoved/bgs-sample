@@ -19,9 +19,9 @@ import android.util.Log;
 import com.red_folder.phonegap.plugin.backgroundservice.BackgroundService;
 
 public class MyService extends BackgroundService {
-	
+
 	private final static String TAG = MyService.class.getSimpleName();
-	
+
 	private String mHelloTo = "World";
 	private boolean mReportRealTime = false;
 	private boolean mReportStatusChange = false;
@@ -43,6 +43,13 @@ public class MyService extends BackgroundService {
 	private int accelerometerReadBackMs = 1000 * 12;
 	private float walkMinStddev = 1.2f;
 	private float walkMinAvg = 1.2f;
+	private float prevx;
+	private float prevy;
+	private float prevz;
+	private float lowPassFilter = 0.1f;
+	private float highPassFilter = 7f;
+	private boolean hasPrevValue = false;
+
 
 	List<AccelomterReading> accelerometerData = new ArrayList<AccelomterReading>(ACCELEROMETER_READ_MAXSIZE);
 
@@ -79,7 +86,7 @@ public class MyService extends BackgroundService {
 	@Override
 	protected JSONObject doWork() {
 		JSONObject result = new JSONObject();
-		
+
 		try {
 			SimpleDateFormat df = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
 			String now = df.format(new Date(System.currentTimeMillis()));
@@ -105,8 +112,8 @@ public class MyService extends BackgroundService {
 			//Log.d(TAG, msg);
 		} catch (JSONException e) {
 		}
-		
-		return result;	
+
+		return result;
 	}
 
 	@Override
@@ -138,12 +145,12 @@ public class MyService extends BackgroundService {
 	@Override
 	protected JSONObject getConfig() {
 		JSONObject result = new JSONObject();
-		
+
 		try {
 			result.put("HelloTo", this.mHelloTo);
 		} catch (JSONException e) {
 		}
-		
+
 		return result;
 	}
 
@@ -171,10 +178,16 @@ public class MyService extends BackgroundService {
 			if (config.has("walkMinAvg"))
 				this.walkMinAvg = (float) config.getDouble("walkMinAvg");
 
+			if (config.has("lowPassFilter"))
+				this.lowPassFilter = (float) config.getDouble("lowPassFilter");
+
+			if (config.has("highPassFilter"))
+				this.highPassFilter = (float) config.getDouble("highPassFilter");
+
 		} catch (JSONException e) {
 		}
-		
-	}     
+
+	}
 
 	@Override
 	protected JSONObject initialiseLatestResult() {
@@ -253,34 +266,8 @@ public class MyService extends BackgroundService {
 				float x = event.values[0];
 				float y = event.values[1];
 				float z = event.values[2];
-				final float g = (x * x + y * y + z * z);
 				float gravity = SensorManager.STANDARD_GRAVITY;
-				acceleration = (float) Math.abs(Math.sqrt(g) - gravity);
-
-				/*
-				if (acceleration <= SENSIBILITY_DOWN) {
-					stop_cnt ++;walk_cnt = run_cnt = 0;
-					if (stop_cnt > TIME_DELAY) {
-						stop_cnt = 0;
-						text_state = STOP;
-						detect_flag = true;
-					}
-				} else if ((acceleration > SENSIBILITY_DOWN) && (acceleration <= SENSIBILITY_UP)) {
-					walk_cnt ++;stop_cnt = run_cnt = 0;
-					if (walk_cnt > TIME_DELAY) {
-						walk_cnt = 0;
-						text_state = WALK;
-						detect_flag = true;
-					}
-				} else if (acceleration > SENSIBILITY_UP) {
-					run_cnt ++;stop_cnt = walk_cnt = 0;
-					if (run_cnt > TIME_DELAY) {
-						run_cnt = 0;
-						text_state = RUN;
-						detect_flag = true;
-					}
-				}
-				*/
+				final float gUnfiltered = (float) Math.abs(Math.sqrt(x * x + y * y + z * z) - gravity);
 
 				long time = System.currentTimeMillis();
 
@@ -304,28 +291,44 @@ public class MyService extends BackgroundService {
 					mAvgSampleRate = (accelerometerReadingList.get(accelerometerReadingList.size() - 1).time - accelerometerReadingList.get(0).time) / accelerometerReadingList.size();
 				}
 
-				AccelomterReading accelomterReading = new AccelomterReading();
-				accelomterReading.value = acceleration;
-				accelomterReading.time = time;
+				//we take the value only if is reasonable for walking
+				if (gUnfiltered < highPassFilter) {
+					if (hasPrevValue) {
+						prevx = x * lowPassFilter + prevx * (1 - lowPassFilter);
+						prevy = y * lowPassFilter + prevy * (1 - lowPassFilter);
+						prevz = z * lowPassFilter + prevz * (1 - lowPassFilter);
+					} else {
+						prevx = x;
+						prevy = y;
+						prevz = z;
+						hasPrevValue = true;
+					}
+					final float g = (prevx * prevx + prevy * prevy + prevz * prevz);
+					acceleration = (float) Math.abs(Math.sqrt(g) - gravity);
 
-				accelerometerData.add(accelomterReading);
-				if (accelerometerData.size() >= ACCELEROMETER_READ_MAXSIZE) {
-					accelerometerData.remove(0);
+
+					AccelomterReading accelomterReading = new AccelomterReading();
+					accelomterReading.value = acceleration;
+					accelomterReading.time = time;
+
+					accelerometerData.add(accelomterReading);
+					if (accelerometerData.size() >= ACCELEROMETER_READ_MAXSIZE) {
+						accelerometerData.remove(0);
+					}
+
+					mStddev = calcStdDev(time);
+
+					int status = 0;
+					if (mStddev > walkMinStddev && mAvg > walkMinAvg) {
+						status = 1;
+					}
+
+					if (mReportRealTime ||
+							(mReportStatusChange && status != mStatus)) {
+						mStatus = status;
+						runOnce();
+					}
 				}
-
-				mStddev = calcStdDev(time);
-
-				int status = 0;
-				if (mStddev > walkMinStddev && mAvg > walkMinAvg) {
-					status = 1;
-				}
-
-				if (mReportRealTime ||
-					(mReportStatusChange && status != mStatus)) {
-					mStatus = status;
-					runOnce();
-				}
-
 			} else if (sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
 				mStepCounter = event.values[0];
 			} else if (sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
