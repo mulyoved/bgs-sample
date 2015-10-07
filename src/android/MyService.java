@@ -25,6 +25,7 @@ public class MyService extends BackgroundService {
 	private String mHelloTo = "World";
 	private boolean mReportRealTime = false;
 	private boolean mReportStatusChange = false;
+    private long mReportStatusChangeStartTime = 0;
 
 	private SensorManager mSensorManager;
 	private float acceleration = 0;
@@ -35,6 +36,7 @@ public class MyService extends BackgroundService {
 	private long mSampleCount = 0;
 	private float mStepCounter = 0;
 	private int mStep = 0;
+    private int mStepWindow = 0;
 	List<AccelomterReadingRaw> accelerometerReadingList = new ArrayList<AccelomterReadingRaw>();
 
 
@@ -50,6 +52,8 @@ public class MyService extends BackgroundService {
 	private float highPassFilter = 7f;
 	private boolean hasPrevValue = false;
 
+    private int stepCountTrigger = 10;
+    private int stepCountWindow = 30000;
 
 	List<AccelomterReading> accelerometerData = new ArrayList<AccelomterReading>(ACCELEROMETER_READ_MAXSIZE);
 
@@ -98,6 +102,8 @@ public class MyService extends BackgroundService {
 			result.put("sampleCount", mSampleCount);
 			result.put("stepCounter", mStepCounter);
 			result.put("stepDetector", mStep);
+            result.put("stepWindows", mStepWindow);
+
 
 
 			String statusString = "drive";
@@ -163,8 +169,14 @@ public class MyService extends BackgroundService {
 			if (config.has("report-realtime"))
 				this.mReportRealTime = config.getBoolean("report-realtime");
 
-			if (config.has("report-status-change"))
-				this.mReportStatusChange = config.getBoolean("report-status-change");
+			if (config.has("report-status-change")) {
+                boolean reportStatusChange = config.getBoolean("report-status-change");
+                if (reportStatusChange && !this.mReportStatusChange) {
+                    this.mReportStatusChange = reportStatusChange;
+                    long time = System.currentTimeMillis();
+                    this.mReportStatusChangeStartTime = time;
+                }
+            }
 
 			if (config.has("accelerometerRawBackMs"))
 				this.accelerometerRawBackMs = config.getInt("accelerometerRawBackMs");
@@ -183,6 +195,13 @@ public class MyService extends BackgroundService {
 
 			if (config.has("highPassFilter"))
 				this.highPassFilter = (float) config.getDouble("highPassFilter");
+
+            if (config.has("stepCountTrigger"))
+                this.stepCountTrigger = (int) config.getDouble("stepCountTrigger");
+
+            if (config.has("stepCountWindow"))
+                this.stepCountWindow = (int) config.getDouble("stepCountWindow");
+
 
 		} catch (JSONException e) {
 		}
@@ -203,8 +222,8 @@ public class MyService extends BackgroundService {
 
 		List<Sensor> deviceSensors = mSensorManager.getSensorList(Sensor.TYPE_ALL);
 
-		mSensorManager.registerListener(sensorEventListener, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), mSensorManager.SENSOR_DELAY_NORMAL);
-		mSensorManager.registerListener(sensorEventListener, mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER), mSensorManager.SENSOR_DELAY_NORMAL);
+		//mSensorManager.registerListener(sensorEventListener, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), mSensorManager.SENSOR_DELAY_NORMAL);
+		//mSensorManager.registerListener(sensorEventListener, mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER), mSensorManager.SENSOR_DELAY_NORMAL);
 		mSensorManager.registerListener(sensorEventListener, mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR), mSensorManager.SENSOR_DELAY_NORMAL);
 
 	}
@@ -216,6 +235,25 @@ public class MyService extends BackgroundService {
 			mSensorManager.unregisterListener(sensorEventListener);
 		}
 	}
+
+    private int calcStepCountWindow(int window, long now) {
+        long timeBack = now - window;
+        timeBack = Math.max(timeBack, mReportStatusChangeStartTime);
+        int stepCount = 0;
+        int i = accelerometerData.size() - 1;
+        while (i >= 0) {
+            AccelomterReading accelomterReading = accelerometerData.get(i);
+            if (accelomterReading.time >= timeBack) {
+                stepCount = (int) accelomterReading.value;
+            } else {
+                break;
+            }
+            i--;
+        }
+
+        return stepCount;
+    }
+
 
 	private float calcStdDev(long now) {
 		long timeBack = now - accelerometerReadBackMs;
@@ -281,15 +319,7 @@ public class MyService extends BackgroundService {
 				accReading.stepDetector = mStep;
 
 				int itemCount = 0;
-				synchronized (accelerometerReadingList) {
-					accelerometerReadingList.add(accReading);
-					itemCount = accelerometerReadingList.size();
-					if (accelerometerReadingList.size() > 20000) {
-						accelerometerReadingList.remove(0);
-					}
-
-					mAvgSampleRate = (accelerometerReadingList.get(accelerometerReadingList.size() - 1).time - accelerometerReadingList.get(0).time) / accelerometerReadingList.size();
-				}
+				collectSensorSample(accReading);
 
 				//we take the value only if is reasonable for walking
 				if (gUnfiltered < highPassFilter) {
@@ -307,14 +337,7 @@ public class MyService extends BackgroundService {
 					acceleration = (float) Math.abs(Math.sqrt(g) - gravity);
 
 
-					AccelomterReading accelomterReading = new AccelomterReading();
-					accelomterReading.value = acceleration;
-					accelomterReading.time = time;
-
-					accelerometerData.add(accelomterReading);
-					if (accelerometerData.size() >= ACCELEROMETER_READ_MAXSIZE) {
-						accelerometerData.remove(0);
-					}
+                    collectReading(time, acceleration);
 
 					mStddev = calcStdDev(time);
 
@@ -332,11 +355,54 @@ public class MyService extends BackgroundService {
 			} else if (sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
 				mStepCounter = event.values[0];
 			} else if (sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
+                long time = System.currentTimeMillis();
+                AccelomterReadingRaw accReading = new AccelomterReadingRaw();
+                accReading.x = event.values[0];
+                accReading.stepDetector = mStep;
+                accReading.time = time;
+                collectSensorSample(accReading);
+
 				if (event.values[0] == 1.0f) {
-					mStep++;
+                    mStep++;
+                    collectReading(time, mStep);
+
+                    int status = 0;
+                    int stepStart = calcStepCountWindow(stepCountWindow, time);
+                    mStepWindow = mStep - stepStart;
+                    if (mStepWindow > stepCountTrigger) {
+                        status = 1;
+                    }
+
+                    if (mReportRealTime ||
+                            (mReportStatusChange && status != mStatus)) {
+                        mStatus = status;
+                        runOnce();
+                    }
 				}
 			}
 
+		}
+
+        private void collectReading(long time, float value) {
+            AccelomterReading accelomterReading = new AccelomterReading();
+            accelomterReading.value = value;
+            accelomterReading.time = time;
+
+            accelerometerData.add(accelomterReading);
+            if (accelerometerData.size() >= ACCELEROMETER_READ_MAXSIZE) {
+                accelerometerData.remove(0);
+            }
+        }
+
+        private void collectSensorSample(AccelomterReadingRaw accReading) {
+			synchronized (accelerometerReadingList) {
+                accelerometerReadingList.add(accReading);
+                if (accelerometerReadingList.size() > 20000) {
+                    accelerometerReadingList.remove(0);
+                }
+
+                mAvgSampleRate = (accelerometerReadingList.get(accelerometerReadingList.size() - 1).time - accelerometerReadingList.get(0).time) / accelerometerReadingList.size();
+            }
 		}
 
 		@Override
