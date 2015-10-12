@@ -28,6 +28,10 @@
 			<clobbers target="cordova.plugins.myService" />
 		</js-module>
 
+        <config-file target="AndroidManifest.xml" parent="/manifest">
+            <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION" />
+        </config-file>
+
         <config-file target="AndroidManifest.xml" parent="/manifest/application">
 
             <service android:name="com.red_folder.phonegap.plugin.backgroundservice.sample.MyService">
@@ -35,10 +39,14 @@
                     <action android:name="com.red_folder.phonegap.plugin.backgroundservice.sample.MyService"/>
                 </intent-filter>
             </service>
+            <service android:label="@string/app_name" android:name="com.red_folder.phonegap.plugin.backgroundservice.sample.ActivityRecognitionService" />
 
         </config-file>
 
         <source-file src="src/android/MyService.java" target-dir="src/com/red_folder/phonegap/plugin/backgroundservice/sample" />
+        <source-file src="src/android/ActivityMessageEvent.java" target-dir="src/com/red_folder/phonegap/plugin/backgroundservice/sample" />
+        <source-file src="src/android/ActivityRecognitionService.java" target-dir="src/com/red_folder/phonegap/plugin/backgroundservice/sample" />
+        <source-file src="src/android/Motion.java" target-dir="src/com/red_folder/phonegap/plugin/backgroundservice/sample" />
     </platform>
 
 </plugin>
