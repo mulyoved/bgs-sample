@@ -43,6 +43,9 @@
 
         </config-file>
 
+        <!-- Gradle config -->
+        <framework src="src/android/sample.gradle" custom="true" type="gradleReference" />
+
         <source-file src="src/android/MyService.java" target-dir="src/com/red_folder/phonegap/plugin/backgroundservice/sample" />
         <source-file src="src/android/ActivityMessageEvent.java" target-dir="src/com/red_folder/phonegap/plugin/backgroundservice/sample" />
         <source-file src="src/android/ActivityRecognitionService.java" target-dir="src/com/red_folder/phonegap/plugin/backgroundservice/sample" />
