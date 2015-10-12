@@ -1,0 +1,7 @@
+// Plugin configuration
+
+cdvPluginPostBuildExtras.add({
+    dependencies {
+        compile 'de.greenrobot:eventbus:2.4.0'
+    }
+});
